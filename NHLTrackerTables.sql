@@ -1,3 +1,12 @@
+-- File Name: NHLTrackerTables.sql
+-- Date: Jun 6, 2013
+-- Author: Milan Sobat
+-- Student #: 0469245
+-- Course: INFO-5051
+-- Purpose: Used to create the NHLTracker database with the tables: Games 
+-- 			and Teams. Games contains all game records between the NHL
+-- 			teams and Teams hold all the team information.
+
 CREATE DATABASE NHLTracker;
 
 CREATE TABLE NHLTracker.Games

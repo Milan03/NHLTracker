@@ -1,3 +1,10 @@
+-- File Name: NHLTrackerInserts.sql
+-- Date: Jun 6, 2013
+-- Author: Milan Sobat
+-- Student #: 0469245
+-- Course: INFO-5051
+-- Purpose: Used to fill the NHLTracker.Teams table with all current NHL teams.
+
 INSERT INTO NHLTracker.Teams ( TeamName, Division, GamesPlayed, Wins, 
 								RegulationLosses, OvertimeLosses, ShootoutLosses, Points )
 VALUES ( "Chicago Blackhawks", "Central Division", 0, 0, 0, 0, 0, 0 ),

@@ -17,6 +17,9 @@ import java.awt.*;
 import java.awt.event.*;
 import java.sql.*;
 import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumn;
+
 import java.util.Vector;
 import org.joda.time.*;
 
@@ -35,14 +38,18 @@ public class M_S_NHLController extends JFrame
 	private static final String PASSWORD = "ereader12";
 	
 	//class scope declarations
-	private JButton addBtn, btnClear, btnDelete, btnRetrieve, btnStandings, btnClose;
+	private JButton addBtn, btnClear, btnDelete, btnRetrieve, btnStandings, 
+					btnClose, btnRefresh, btnCloseStandings;
 	private JComboBox cmbMonth, cmbDay, cmbYear;
-	private static JComboBox cmbHome;
 
-	private static JComboBox cmbAway;
+	private JComboBox cmbDivision;
+	private static JComboBox cmbHome, cmbAway;
 	private JTextField fldHome, fldAway;
 	private JCheckBox chbOvertime, chbShootout;
-	private ButtonListener listener;
+	private ButtonListener listener, stndListener;
+	
+	private JFrame standings = new JFrame();
+	private JPanel tablePanel = new JPanel();
 	
 	private static Connection conn = null;
 	private static Statement stmt = null;
@@ -83,6 +90,10 @@ public class M_S_NHLController extends JFrame
 		
 		//create one button listener object for all buttons
 		listener = new ButtonListener();
+		
+		//serperate listener for Standings window
+		stndListener = new ButtonListener();
+		
 		// GameInfoPanel
 		JPanel gameInfoPanel = new JPanel();
 		
@@ -173,6 +184,21 @@ public class M_S_NHLController extends JFrame
 		buttonPanel.setLayout( new GridLayout(2, 3, 20, 20) );
 		buttonPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 		
+		// Standings Button Panel
+		JPanel stdButtonPanel = new JPanel( new GridLayout( 1, 4, 10, 10));
+		JPanel tablePanel = new JPanel();
+		
+		JLabel lblDivision = new JLabel("Select Division: ");
+		stdButtonPanel.add(lblDivision);
+		
+		String[] divisions = { "All Divisions", "Central Division", "Atlantic Division", "Northeast Division", 
+								"Northwest Division", "Pacific Division", "Southeast Division" };
+		
+		
+		cmbDivision = new JComboBox(divisions);
+		stdButtonPanel.add(cmbDivision);
+		cmbDivision.addActionListener(stndListener);
+		
 		addBtn = new JButton("Add");
 		addBtn.addActionListener(listener);
 		buttonPanel.add(addBtn);
@@ -197,14 +223,32 @@ public class M_S_NHLController extends JFrame
 		btnClose.addActionListener(listener);
 		buttonPanel.add(btnClose);
 		
+		btnRefresh = new JButton("Refresh");
+		btnRefresh.addActionListener(listener);
+		stdButtonPanel.add(btnRefresh);
+		
+		btnCloseStandings = new JButton("Close");
+		btnCloseStandings.addActionListener(listener);
+		stdButtonPanel.add(btnCloseStandings);
+		
+		standings.add(stdButtonPanel, BorderLayout.SOUTH);
 		this.add(buttonPanel, BorderLayout.SOUTH);
 		
 		//last line
 		this.setVisible(true);
 		
+		// Standings window
+		
+		int frWidth = (int)(0.25 * this.getToolkit().getScreenSize().width);
+		int frHeight = (int)(0.18 * this.getToolkit().getScreenSize().height);
+		standings.setSize(frWidth, frHeight);
+		standings.setLocationRelativeTo(null);
+		standings.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+		
 		
 	}//end constructor
 	
+	// main -- initialize comboboxes
 	public static void main(String[] args) throws SQLException 
 	{
 		// anonymous object...
@@ -418,7 +462,6 @@ public class M_S_NHLController extends JFrame
 						  +" AND HomeTeamID = " +homeTeam +" AND AwayTeamID = " +awayTeam +";";
 		int[] info = new int[4];
 		try {
-			rslt = null;
 			Class.forName( DRIVER );
 			
 			conn = DriverManager.getConnection( DATA_SOURCE, USER_NAME, PASSWORD );
@@ -450,7 +493,79 @@ public class M_S_NHLController extends JFrame
 		
 		return info;
 	}
-
+	
+	// Method to create/recreate the JTable used for the Standings window
+	private void createTable() throws SQLException {
+		String division = cmbDivision.getSelectedItem().toString();
+		standings.setTitle(division +" Standings");
+		String query = "";
+				
+		if ( division != "All Divisions") {
+			query = "SELECT TeamName, GamesPlayed AS \"GP\", Wins, RegulationLosses AS \"Losses\", " 
+							+" OvertimeLosses AS \"OTL\", ShootoutLosses AS \"SOL\", Points\n"
+							+"FROM NHLTracker.Teams\n"
+							+"WHERE Division = \""+division+"\"\n"
+							+"ORDER BY Points DESC";
+		} else {
+			query = "SELECT TeamName, GamesPlayed AS \"GP\", Wins, RegulationLosses AS \"Losses\", " 
+					+" OvertimeLosses AS \"OTL\", ShootoutLosses AS \"SOL\", Points\n"
+					+"FROM NHLTracker.Teams\n"
+					+"ORDER BY Points DESC";
+		}
+		Vector colNames = new Vector();
+		Vector data = new Vector();
+		try {
+			Class.forName( DRIVER );
+			
+			conn = DriverManager.getConnection( DATA_SOURCE, USER_NAME, PASSWORD );
+			
+			stmt = conn.createStatement();
+			
+			rslt = stmt.executeQuery(query);
+			
+			ResultSetMetaData metaData = rslt.getMetaData();
+			
+			int numCols = metaData.getColumnCount();
+			
+			// get column names
+			for ( int i = 1; i <= numCols; ++i )
+				colNames.add( metaData.getColumnName(i));
+			
+			// get rows
+			while ( rslt.next() ) {
+				Vector row = new Vector();
+				for ( int i = 1; i <= numCols; ++i ) 
+					row.add(rslt.getString(i));
+				data.add(row);
+			}
+			
+			DefaultTableModel tm = new DefaultTableModel();
+			tm.setRowCount(0);
+			tm = new DefaultTableModel(data, colNames);
+			tm.fireTableDataChanged();
+			// make JTable
+			TableColumn col = null;
+			JTable table = new JTable(tm);
+			col = table.getColumnModel().getColumn(0);
+			col.setPreferredWidth(300);
+			JScrollPane scrollPane = new JScrollPane(table);
+			tablePanel.add(scrollPane);
+			
+		} catch ( SQLException sqlEx ) {
+			JOptionPane.showMessageDialog(null, "Error:\nSQL Excpetion" +sqlEx.getMessage()
+					, "Error", JOptionPane.ERROR_MESSAGE, null);
+		} catch ( Exception ex ) {
+			JOptionPane.showMessageDialog(null, "Exception: " +ex.getMessage());
+		} finally {
+			if ( rslt != null ) 
+				rslt.close();
+			if ( stmt != null )
+				stmt.close();
+			if ( conn != null ) 
+				conn.close();
+			
+		}
+	}
 	
 	//Implement a listener for ActionEvents 
 	// as an inner class
@@ -460,6 +575,44 @@ public class M_S_NHLController extends JFrame
 		@Override
 		public void actionPerformed(ActionEvent e)
 		{
+			// On combo reselection in Standings
+			if ( e.getSource() == cmbDivision ) {
+				try {
+					tablePanel.removeAll();
+					
+					createTable();
+					standings.add(tablePanel, BorderLayout.CENTER );
+					standings.repaint();
+					standings.revalidate();
+					
+				} catch ( SQLException sqlEx ) {
+					JOptionPane.showMessageDialog(null, "SQLException:\n"+sqlEx.getMessage(), 
+							"Error", JOptionPane.ERROR_MESSAGE );
+				}
+			}
+			
+			// Standings Refresh button
+			if ( e.getSource() == btnRefresh ) {
+				
+				try {
+					tablePanel.removeAll();
+					
+					createTable();
+					standings.add(tablePanel, BorderLayout.CENTER );
+					standings.repaint();
+					standings.revalidate();
+					
+				} catch ( SQLException sqlEx ) {
+					JOptionPane.showMessageDialog(null, "SQLException:\n"+sqlEx.getMessage(), 
+							"Error", JOptionPane.ERROR_MESSAGE );
+				}
+			}
+			
+			// Standings Close button
+			if ( e.getSource() == btnCloseStandings ) {
+				standings.setVisible(false);
+			}
+			
 			// Days of month to be reloaded each time a new month or year is chosen
 			if ( e.getSource() == cmbMonth || e.getSource() == cmbYear ) {
 				cmbDay.removeAllItems();
@@ -568,6 +721,59 @@ public class M_S_NHLController extends JFrame
 					chbShootout.setSelected(false);
 			}// end btnDelete
 			
+			// Retrieve button
+			if ( e.getSource() == btnRetrieve ) {
+				int year = Integer.parseInt(cmbYear.getSelectedItem().toString());
+				int month = cmbMonth.getSelectedIndex() +1;
+				int day = cmbDay.getSelectedIndex() + 1;
+				int homeTeam = cmbHome.getSelectedIndex() + 1;
+				int awayTeam = cmbAway.getSelectedIndex() + 1;
+				int info[] = new int[4];
+				
+				// query for goals and overtime/shootout info to pass to delete method
+				try {
+					info = getGameInfo( year, month, day, homeTeam, awayTeam );
+				} catch ( SQLException sqlEx ){
+					JOptionPane.showMessageDialog(null, "Error:\nSQL Excpetion" +sqlEx.getMessage()
+							, "Error", JOptionPane.ERROR_MESSAGE, null);
+				}
+				
+				int goalsHome = info[0];
+				int goalsAway = info[1];
+				boolean overtime = false;
+				boolean shootout = false;
+				
+				if ( info[2] == 1 )
+					overtime = true;
+				if ( info[3] == 1 )
+					shootout = true;
+				
+				// Check that there is data for the games
+				if ( goalsHome > 0 && goalsAway > 0 ) {
+					// set to fields
+					fldHome.setText(Integer.toString( goalsHome ));
+					fldAway.setText(Integer.toString( goalsAway ));
+					
+					if ( overtime )
+						chbOvertime.setSelected(true);
+					if ( shootout )
+						chbShootout.setSelected(true);
+				} else
+					JOptionPane.showMessageDialog(null, "Game not found!", "Retrieve Error", JOptionPane.ERROR_MESSAGE);
+			}// end btnRetrieve
+			
+			if ( e.getSource() == btnStandings ) {
+				standings.setVisible(true);
+				
+				try {
+					createTable();
+				} catch ( SQLException sqlEx ) {
+					JOptionPane.showMessageDialog(null, "SQLException:\n"+sqlEx.getMessage(), 
+							"Error", JOptionPane.ERROR_MESSAGE );
+				}
+				standings.add(tablePanel);
+			}// end btnStandings
+
 			// Clear button
 			if ( e.getSource() == btnClear ) {
 				// reset fields
